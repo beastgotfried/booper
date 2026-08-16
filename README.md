@@ -1,12 +1,15 @@
 # enshittify.dev
 
 enshittify.dev is a Python code mutation harness that intentionally makes an isolated copy of a
-codebase harder to read and maintain. The harness itself is deterministic, observable, reversible,
-and careful with the source repository. The output is the bad part.
+codebase harder to read and maintain. It can run deterministically or let an LLM inspect the copied
+workspace, choose tools, perform targeted rewrites, and review the resulting diff. The harness
+itself remains observable, reversible, and careful with the source repository. The output is the
+bad part.
 
 The current release accepts local directories and Git URLs, including public GitHub repositories.
-It discovers Python files, runs any of 21 LangChain mutation tools through a LangGraph harness, and
-produces a mutated workspace with a unified patch and a structured run report.
+It discovers Python files, exposes five workspace-scoped tools to a LangChain agent compiled to
+LangGraph, and provides 21 deterministic mutation tools as its execution engine. Every run produces
+a mutated workspace, unified patch, event log, manifest, and structured report.
 
 ## Install
 
@@ -51,6 +54,24 @@ enshittify run . \
   --budget 30
 ```
 
+Run the Groq-backed hybrid harness:
+
+```bash
+export GROQ_API_KEY="your-key"
+enshittify doctor --provider groq
+enshittify run . \
+  --provider groq \
+  --mode hybrid \
+  --model openai/gpt-oss-120b \
+  --profile maximum \
+  --budget 16
+```
+
+`hybrid` lets the model inspect files, invoke allowlisted mutations, submit syntax-validated source
+rewrites, and review its diff. Any budget the model leaves unused is filled by the deterministic
+engine. Use `--mode agent` for a model-only mutation loop or `--no-llm-rewrites` to allow model tool
+selection without whole-file rewrites.
+
 The source is never edited in place. Every run is written beneath `.enshittify/runs` by default.
 Use `--output-dir` to place runs elsewhere. Test files are excluded unless `--include-tests` is
 provided.
@@ -62,12 +83,25 @@ enshittify run --help
 enshittify inspect ./repository
 enshittify tools list
 enshittify profiles list
+enshittify providers --json
 enshittify report .enshittify/runs/RUN_ID
 enshittify doctor
 ```
 
-Use `--dry-run` to inspect files and record a bounded plan without invoking mutation tools. Use
-`--json` on discovery, inspection, run, and report commands for machine-readable output.
+Use `--dry-run` to record a bounded plan without changing the copied workspace. An agent dry run
+still calls the configured model. Use `--json` on discovery, inspection, run, and report commands
+for machine-readable output.
+
+## Harness Modes
+
+- `deterministic`: apply the selected profile tools directly; no model or API key is required.
+- `agent`: let the provider drive the inspect/read/mutate/rewrite/review loop.
+- `hybrid`: run the agent first, then spend remaining mutation budget deterministically.
+- `auto`: SDK and CLI default; resolves to deterministic for provider `none`, otherwise hybrid.
+
+GroqCloud and xAI/Grok are different providers. This release includes GroqCloud through
+`langchain-groq`. The provider contract accepts any caller-supplied LangChain chat model, so future
+OpenAI, Anthropic, xAI, local, or OpenAI-compatible adapters do not change the core harness.
 
 ## Run Artifacts
 
@@ -114,8 +148,21 @@ print(result.patch_path)
 print(result.report_path)
 ```
 
-The deterministic harness does not require an LLM API key. Provider-backed planning can be added
-above the same tool and profile contracts without changing repository execution.
+Use Groq through the SDK:
+
+```python
+import os
+
+from enshittify_sdk import Enshittify
+
+client = Enshittify(
+    provider="groq",
+    api_key=os.environ["GROQ_API_KEY"],
+    model="openai/gpt-oss-120b",
+    mode="hybrid",
+)
+result = client.run_repository("./repository", budget=16)
+```
 
 ## Development
 
@@ -123,6 +170,7 @@ above the same tool and profile contracts without changing repository execution.
 make install
 make test
 make smoke
+make live-groq  # opt-in; skips unless GROQ_API_KEY is set
 ```
 
 The full implementation roadmap and package architecture are in
@@ -133,4 +181,6 @@ The full implementation roadmap and package architecture are in
 Only repositories you own or are authorized to modify should be processed. The CLI does not push,
 commit, open pull requests, execute target code, follow repository symlinks, or mutate the source
 directory. Git authentication is delegated to the user's configured Git credential helper; secrets
-in repository URLs are rejected.
+in repository URLs are rejected. Model-backed runs send bounded repository metadata and source
+content read through agent tools to the selected provider. API keys are never included in reports,
+events, manifests, prompts, or command-line arguments.

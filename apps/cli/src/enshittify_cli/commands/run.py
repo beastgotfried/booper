@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 
 from enshittify_sdk import Enshittify
 
@@ -31,6 +32,71 @@ def configure(subparsers: argparse._SubParsersAction) -> None:
     )
     parser.add_argument(
         "--budget", type=int, help="Maximum tool invocations across the repository."
+    )
+    parser.add_argument(
+        "--provider",
+        choices=("none", "groq"),
+        default="none",
+        help="LLM provider; `none` keeps the run deterministic.",
+    )
+    parser.add_argument(
+        "--model", help="Provider model ID; defaults to the provider's stable model."
+    )
+    parser.add_argument(
+        "--mode",
+        choices=("auto", "deterministic", "agent", "hybrid"),
+        default="auto",
+        help="Execution strategy; auto selects hybrid when a provider is configured.",
+    )
+    parser.add_argument(
+        "--api-key-env",
+        metavar="NAME",
+        help="Environment variable containing the provider key (default: GROQ_API_KEY).",
+    )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=0.0,
+        help="Provider sampling temperature; zero favors reliable tool calls.",
+    )
+    parser.add_argument(
+        "--provider-timeout",
+        type=float,
+        default=120.0,
+        help="Timeout in seconds for each model request.",
+    )
+    parser.add_argument(
+        "--provider-max-retries",
+        type=int,
+        default=2,
+        help="Maximum provider retries for transient failures.",
+    )
+    parser.add_argument(
+        "--provider-max-tokens",
+        type=int,
+        default=8192,
+        help="Maximum completion tokens per model call.",
+    )
+    parser.add_argument(
+        "--agent-steps",
+        type=int,
+        default=24,
+        help="Maximum model/tool loop iterations before stopping.",
+    )
+    parser.add_argument(
+        "--agent-read-chars",
+        type=int,
+        default=24_000,
+        help="Maximum source characters returned by a read tool call.",
+    )
+    parser.add_argument(
+        "--no-llm-rewrites",
+        action="store_true",
+        help="Restrict the model to deterministic mutation tools.",
+    )
+    parser.add_argument(
+        "--instruction",
+        help="Additional run objective supplied to the degradation agent.",
     )
     parser.add_argument(
         "--tool",
@@ -68,7 +134,30 @@ def configure(subparsers: argparse._SubParsersAction) -> None:
 
 
 def handle(args: argparse.Namespace) -> int:
-    client = Enshittify(output_root=args.output_dir)
+    api_key = None
+    if args.provider != "none" and args.mode != "deterministic":
+        api_key_env = args.api_key_env or "GROQ_API_KEY"
+        api_key = os.getenv(api_key_env)
+        if not api_key:
+            raise ValueError(
+                f"Provider `{args.provider}` requires an API key in environment variable "
+                f"`{api_key_env}`."
+            )
+
+    client = Enshittify(
+        output_root=args.output_dir,
+        provider=args.provider,
+        api_key=api_key,
+        model=args.model,
+        temperature=args.temperature,
+        provider_timeout=args.provider_timeout,
+        provider_max_retries=args.provider_max_retries,
+        provider_max_tokens=args.provider_max_tokens,
+        mode=args.mode,
+        allow_llm_rewrites=not args.no_llm_rewrites,
+        max_agent_steps=args.agent_steps,
+        max_agent_read_chars=args.agent_read_chars,
+    )
     result = client.run_repository(
         args.source,
         ref=args.ref,
@@ -80,21 +169,33 @@ def handle(args: argparse.Namespace) -> int:
         tools=args.tools,
         output=args.output,
         max_file_bytes=args.max_file_bytes,
+        instruction=args.instruction,
     )
 
+    exit_code = 1 if result.status == "failed" else 0
     if args.json:
         print_json(result.to_dict())
-        return 0
+        return exit_code
 
     summary = result.report["summary"]
     print(f"enshittify.dev run {result.run_id}")
     print(f"status:      {result.status}")
     print(f"profile:     {result.report['configuration']['profile']}")
+    print(f"mode:        {result.report['configuration']['mode']}")
+    provider = result.report["configuration"]["provider"]
+    if provider["name"] != "none":
+        print(f"provider:    {provider['name']} / {provider['model']}")
     print(
         f"files:       {len(result.changed_files)} changed / {summary['candidate_files']} eligible"
     )
     print(f"invocations: {summary['attempted_tool_invocations']}")
     print(f"badness:     {summary['badness_score']} / 100")
+    if result.report["agent"]:
+        usage = result.report["agent"]["usage"]
+        print(
+            f"model calls: {result.report['agent']['model_calls']} "
+            f"({usage['total_tokens']} tokens)"
+        )
     print(f"workspace:   {display_path(result.workspace_dir)}")
     print(f"patch:       {display_path(result.patch_path)}")
     print(f"report:      {display_path(result.report_path)}")
@@ -102,4 +203,4 @@ def handle(args: argparse.Namespace) -> int:
         print(f"archive:     {display_path(result.archive_path)}")
     if result.report["warnings"]:
         print(f"warnings:    {len(result.report['warnings'])} (see report)")
-    return 0
+    return exit_code

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import difflib
-import hashlib
 import json
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -15,11 +14,15 @@ from enshittify_backends import PreparedWorkspace
 from enshittify_backends.artifacts import archive_directory, write_json, write_text
 from enshittify_languages import inspect_repository, iter_python_files
 from enshittify_profiles import get_profile
+from enshittify_providers import ModelProvider
 from enshittify_tools.catalog import list_mutation_tool_names
-from enshittify_tools.result import ToolChainResult
 
-from enshittify_core.harness.create_harness import create_harness
+from enshittify_core.harness.execution import (
+    run_agent_execution,
+    run_deterministic_execution,
+)
 
+HARNESS_MODES = frozenset({"agent", "deterministic", "hybrid"})
 OUTPUT_MODES = frozenset({"archive", "patch", "workspace"})
 
 
@@ -54,14 +57,6 @@ class RepositoryRunResult:
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
-
-
-def _sha256(content: str) -> str:
-    return hashlib.sha256(content.encode("utf-8")).hexdigest()
-
-
-def _line_count(content: str) -> int:
-    return len(content.splitlines())
 
 
 def _generate_patch(
@@ -112,6 +107,7 @@ def _render_markdown(report: dict[str, Any]) -> str:
         f"- Source: `{report['source']['display']}`",
         f"- Profile: `{report['configuration']['profile']}`",
         f"- Intensity: `{report['configuration']['intensity']}`",
+        f"- Mode: `{report['configuration']['mode']}`",
         f"- Badness score: `{summary['badness_score']}` / `100`",
         f"- Files changed: `{len(summary['changed_files'])}` / `{summary['candidate_files']}`",
         f"- Tool invocations: `{summary['attempted_tool_invocations']}`",
@@ -125,6 +121,30 @@ def _render_markdown(report: dict[str, Any]) -> str:
     if artifacts.get("archive"):
         lines.append(f"- Workspace archive: `{artifacts['archive']}`")
 
+    if report["agent"]:
+        agent = report["agent"]
+        usage = agent["usage"]
+        lines.extend(
+            [
+                "",
+                "## Model Harness",
+                "",
+                f"- Provider: `{agent['provider']['name']}`",
+                f"- Model: `{agent['provider']['model']}`",
+                f"- Model calls: `{agent['model_calls']}`",
+                f"- Tokens: `{usage['total_tokens']}`",
+                f"- Stop reason: `{agent['stopped_reason']}`",
+                f"- Deterministic fallback: `{agent['fallback_used']}`",
+            ]
+        )
+        if agent["actions"]:
+            lines.extend(["", "### Agent Actions", ""])
+            lines.extend(
+                f"- `{action['sequence']}` `{action['actor']}` `{action['tool']}` "
+                f"on `{action['path']}`: {action['status']}"
+                for action in agent["actions"]
+            )
+
     lines.extend(["", "## Changed Files", ""])
     if summary["changed_files"]:
         lines.extend(f"- `{path}`" for path in summary["changed_files"])
@@ -135,7 +155,8 @@ def _render_markdown(report: dict[str, Any]) -> str:
     for name, activity in report["tool_activity"].items():
         lines.append(
             f"- `{name}`: {activity['changed']} changed / "
-            f"{activity['invocations']} invocation(s), {activity['edits']} edit(s)"
+            f"{activity['invocations']} invocation(s), {activity['planned']} planned, "
+            f"{activity['edits']} edit(s)"
         )
 
     if report["warnings"]:
@@ -145,7 +166,7 @@ def _render_markdown(report: dict[str, Any]) -> str:
 
 
 class RepositoryHarness:
-    """Apply a deterministic LangGraph mutation harness across a staged repository."""
+    """Apply deterministic or model-directed mutations to a staged repository."""
 
     def run(
         self,
@@ -159,12 +180,27 @@ class RepositoryHarness:
         tools: Iterable[str] | None = None,
         output: str = "workspace",
         max_file_bytes: int = 1_000_000,
+        provider: ModelProvider | None = None,
+        mode: str = "deterministic",
+        allow_llm_rewrites: bool = True,
+        max_agent_steps: int = 24,
+        max_agent_read_chars: int = 24_000,
+        instruction: str | None = None,
     ) -> RepositoryRunResult:
         if budget is not None and budget < 1:
             raise ValueError("Budget must be at least 1 when provided.")
         if output not in OUTPUT_MODES:
             choices = ", ".join(sorted(OUTPUT_MODES))
             raise ValueError(f"Unknown output mode `{output}`. Choose from: {choices}.")
+        if mode not in HARNESS_MODES:
+            choices = ", ".join(sorted(HARNESS_MODES))
+            raise ValueError(f"Unknown harness mode `{mode}`. Choose from: {choices}.")
+        if mode != "deterministic" and provider is None:
+            raise ValueError(f"Harness mode `{mode}` requires an LLM provider.")
+        if max_agent_steps < 1:
+            raise ValueError("max_agent_steps must be at least 1.")
+        if max_agent_read_chars < 1:
+            raise ValueError("max_agent_read_chars must be at least 1.")
 
         started_at = _utc_now()
         profile = get_profile(profile_name)
@@ -188,144 +224,63 @@ class RepositoryHarness:
             max_file_bytes=max_file_bytes,
         )
 
-        events: list[dict[str, Any]] = []
-        warnings: list[str] = []
-        file_results: list[dict[str, Any]] = []
-        changed_files: list[str] = []
-        planned_invocations = 0
-        attempted_invocations = 0
-        changed_invocations = 0
-        lines_before = 0
-        lines_after = 0
-        tool_activity = {
-            name: {"invocations": 0, "changed": 0, "edits": 0}
-            for name in selected_tools
-        }
-
-        def emit(event_type: str, **payload: Any) -> None:
-            events.append({"at": _utc_now(), "type": event_type, **payload})
-
-        emit(
-            "run_started",
-            run_id=workspace.run_id,
-            profile=profile.name,
-            tools=selected_tools,
-        )
-        if not candidate_paths:
-            warnings.append("No eligible Python files were found in the repository.")
-
-        graph = create_harness() if candidate_paths and not dry_run else None
-        for path in candidate_paths:
-            if budget is not None and planned_invocations >= budget:
-                emit("budget_exhausted", budget=budget)
-                break
-
-            relative_path = path.relative_to(workspace.working_dir).as_posix()
-            try:
-                original_code = path.read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError) as error:
-                warning = f"Skipped `{relative_path}`: {error}"
-                warnings.append(warning)
-                emit("file_skipped", path=relative_path, reason=str(error))
-                continue
-
-            lines_before += _line_count(original_code)
-            names_for_file = selected_tools
-            if budget is not None:
-                remaining = budget - planned_invocations
-                names_for_file = selected_tools[:remaining]
-            planned_invocations += len(names_for_file)
-
-            emit("file_started", path=relative_path, tools=names_for_file)
-            if dry_run:
-                file_results.append(
-                    {
-                        "path": relative_path,
-                        "changed": False,
-                        "planned_tools": names_for_file,
-                        "runs": [],
-                    }
-                )
-                lines_after += _line_count(original_code)
-                emit("file_planned", path=relative_path)
-                continue
-
-            attempted_invocations += len(names_for_file)
-            try:
-                assert graph is not None
-                graph_result = graph.invoke(
-                    {
-                        "code": original_code,
-                        "tool_names": names_for_file,
-                        "continue_on_error": True,
-                    }
-                )
-                chain: ToolChainResult = graph_result["result"]
-            except Exception as error:  # noqa: BLE001 - one bad file must not abort a run
-                warning = (
-                    f"Mutation failed for `{relative_path}`: "
-                    f"{type(error).__name__}: {error}"
-                )
-                warnings.append(warning)
-                file_results.append(
-                    {
-                        "path": relative_path,
-                        "changed": False,
-                        "error": str(error),
-                        "planned_tools": names_for_file,
-                        "runs": [],
-                    }
-                )
-                lines_after += _line_count(original_code)
-                emit("file_failed", path=relative_path, error=str(error))
-                continue
-
-            final_code = chain.code
-            if (
-                chain.changed
-                and original_code.endswith("\n")
-                and not final_code.endswith("\n")
-            ):
-                final_code += "\n"
-            if chain.changed:
-                path.write_text(final_code, encoding="utf-8")
-                changed_files.append(relative_path)
-
-            run_records: list[dict[str, Any]] = []
-            for tool_run in chain.runs:
-                activity = tool_activity[tool_run.name]
-                activity["invocations"] += 1
-                activity["edits"] += len(tool_run.result.edits)
-                if tool_run.result.changed:
-                    activity["changed"] += 1
-                    changed_invocations += 1
-                warnings.extend(
-                    f"`{relative_path}` / `{tool_run.name}`: {warning}"
-                    for warning in tool_run.result.warnings
-                )
-                run_records.append(
-                    {
-                        "name": tool_run.name,
-                        "changed": tool_run.result.changed,
-                        "summary": tool_run.result.summary,
-                        "edit_count": len(tool_run.result.edits),
-                        "warnings": list(tool_run.result.warnings),
-                    }
-                )
-
-            lines_after += _line_count(final_code)
-            file_results.append(
-                {
-                    "path": relative_path,
-                    "changed": chain.changed,
-                    "before_sha256": _sha256(original_code),
-                    "after_sha256": _sha256(final_code),
-                    "lines_before": _line_count(original_code),
-                    "lines_after": _line_count(final_code),
-                    "runs": run_records,
-                }
+        if mode == "deterministic":
+            execution = run_deterministic_execution(
+                workspace_root=workspace.working_dir,
+                candidate_paths=candidate_paths,
+                selected_tools=selected_tools,
+                budget=budget,
+                dry_run=dry_run,
             )
-            emit("file_completed", path=relative_path, changed=chain.changed)
+        else:
+            assert provider is not None
+            execution = run_agent_execution(
+                workspace_root=workspace.working_dir,
+                original_root=workspace.original_dir,
+                candidate_paths=candidate_paths,
+                inspection=inspection,
+                selected_tools=selected_tools,
+                profile=profile.name,
+                intensity=intensity,
+                budget=budget,
+                dry_run=dry_run,
+                provider=provider,
+                mode=mode,
+                allow_rewrites=allow_llm_rewrites,
+                max_agent_steps=max_agent_steps,
+                max_read_chars=max_agent_read_chars,
+                instruction=instruction,
+            )
+
+        events: list[dict[str, Any]] = [
+            {
+                "at": started_at,
+                "type": "run_started",
+                "run_id": workspace.run_id,
+                "profile": profile.name,
+                "mode": mode,
+                "tools": selected_tools,
+            },
+            *execution.events,
+        ]
+        warnings = list(execution.warnings)
+        if not candidate_paths:
+            warnings = list(
+                dict.fromkeys(
+                    [
+                        "No eligible Python files were found in the repository.",
+                        *warnings,
+                    ]
+                )
+            )
+        file_results = execution.file_results
+        changed_files = execution.changed_files
+        planned_invocations = execution.planned_invocations
+        attempted_invocations = execution.attempted_invocations
+        changed_invocations = execution.changed_invocations
+        lines_before = execution.lines_before
+        lines_after = execution.lines_after
+        tool_activity = execution.tool_activity
 
         patch_content = _generate_patch(
             workspace.original_dir,
@@ -341,6 +296,13 @@ class RepositoryHarness:
             )
 
         status = "dry_run" if dry_run else "completed"
+        if (
+            execution.agent
+            and mode == "agent"
+            and execution.agent.stopped_reason == "provider_error"
+            and not changed_files
+        ):
+            status = "failed"
         if warnings and status == "completed":
             status = "completed_with_warnings"
         badness_score = _score_run(
@@ -356,15 +318,18 @@ class RepositoryHarness:
         report_markdown_path = workspace.artifacts_dir / "report.md"
         events_path = workspace.artifacts_dir / "events.jsonl"
         manifest_path = workspace.artifacts_dir / "manifest.json"
-        emit(
-            "run_completed",
-            status=status,
-            changed_files=len(changed_files),
-            badness_score=badness_score,
+        events.append(
+            {
+                "at": completed_at,
+                "type": "run_completed",
+                "status": status,
+                "changed_files": len(changed_files),
+                "badness_score": badness_score,
+            }
         )
 
         report: dict[str, Any] = {
-            "schema_version": 1,
+            "schema_version": 2,
             "run_id": workspace.run_id,
             "status": status,
             "started_at": started_at,
@@ -377,11 +342,21 @@ class RepositoryHarness:
             "configuration": {
                 "profile": profile.name,
                 "intensity": intensity,
+                "mode": mode,
+                "provider": (
+                    execution.agent.provider.model_dump(mode="json")
+                    if execution.agent
+                    else {"name": "none", "model": None, "capabilities": []}
+                ),
                 "budget": budget,
+                "effective_budget": execution.effective_budget,
                 "include_tests": include_tests,
                 "dry_run": dry_run,
                 "output": output,
                 "tools": selected_tools,
+                "allow_llm_rewrites": allow_llm_rewrites,
+                "max_agent_steps": max_agent_steps,
+                "max_agent_read_chars": max_agent_read_chars,
             },
             "inspection": inspection.to_dict(),
             "summary": {
@@ -397,6 +372,9 @@ class RepositoryHarness:
             },
             "tool_activity": tool_activity,
             "files": file_results,
+            "agent": (
+                execution.agent.model_dump(mode="json") if execution.agent else None
+            ),
             "warnings": warnings,
             "artifacts": {
                 "workspace": str(workspace.working_dir),
@@ -410,7 +388,7 @@ class RepositoryHarness:
         }
 
         manifest = {
-            "schema_version": 1,
+            "schema_version": 2,
             "run_id": workspace.run_id,
             "source": report["source"],
             "configuration": report["configuration"],

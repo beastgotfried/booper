@@ -978,9 +978,10 @@ class Provider:
 Supported provider modes:
 
 - `none`: deterministic tool planning only.
+- `groq`: GroqCloud-hosted model through `langchain-groq`.
 - `openai`: OpenAI model.
 - `anthropic`: Claude model.
-- `grok`: xAI/Grok model.
+- `xai`: xAI/Grok model; this is distinct from GroqCloud.
 - `local`: local OpenAI-compatible server.
 
 Use provider calls for:

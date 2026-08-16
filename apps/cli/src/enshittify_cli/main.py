@@ -7,7 +7,7 @@ import sys
 
 from enshittify_backends import WorkspaceError
 
-from enshittify_cli.commands import doctor, inspect, packs, report, run
+from enshittify_cli.commands import doctor, inspect, packs, providers, report, run
 from enshittify_cli.ui.console import print_error
 
 VERSION = "0.1.0"
@@ -24,6 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     inspect.configure(subparsers)
     packs.configure_tools(subparsers)
     packs.configure_profiles(subparsers)
+    providers.configure(subparsers)
     report.configure(subparsers)
     doctor.configure(subparsers)
     return parser

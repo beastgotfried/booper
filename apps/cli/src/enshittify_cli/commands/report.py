@@ -45,11 +45,21 @@ def handle(args: argparse.Namespace) -> int:
     print(f"status:      {report['status']}")
     print(f"source:      {report['source']['display']}")
     print(f"profile:     {report['configuration']['profile']}")
+    print(f"mode:        {report['configuration'].get('mode', 'deterministic')}")
+    provider = report["configuration"].get("provider", {"name": "none", "model": None})
+    if provider["name"] != "none":
+        print(f"provider:    {provider['name']} / {provider['model']}")
     print(
         f"files:       {len(summary['changed_files'])} changed / {summary['candidate_files']} eligible"
     )
     print(f"invocations: {summary['attempted_tool_invocations']}")
     print(f"badness:     {summary['badness_score']} / 100")
+    if report.get("agent"):
+        usage = report["agent"]["usage"]
+        print(
+            f"model calls: {report['agent']['model_calls']} "
+            f"({usage['total_tokens']} tokens)"
+        )
     print(f"workspace:   {report['artifacts']['workspace']}")
     print(f"patch:       {report['artifacts']['patch']}")
     return 0
