@@ -44,6 +44,32 @@ result = client.run_repository(
 The plain key is held only in the SDK configuration object with its representation disabled. It is
 used to construct the provider and is not copied into reports, manifests, events, or model prompts.
 
+## Codx
+
+Use an authorized local Codx wrapper without supplying an API key:
+
+```python
+from enshittify_sdk import Enshittify
+
+client = Enshittify(
+    output_root="./enshittify-runs",
+    provider="codx",
+    mode="hybrid",
+    codx_command="codx",
+    codx_timeout=1800,
+)
+result = client.run_repository(
+    "./repository",
+    profile="maximum",
+    budget=16,
+)
+```
+
+The adapter runs the wrapper's non-interactive `exec --json` command and connects a short-lived
+enshittify MCP server. The Enter prompt shown by a manually launched interactive `codx --yolo`
+session is not part of this SDK path. `codx_yolo` defaults to `True` so destructive MCP calls can
+run unattended; set it to `False` when the surrounding environment supplies approval handling.
+
 ## Custom LangChain Models
 
 Provider switching is based on a small model-provider contract. Wrap any tool-calling LangChain

@@ -10,11 +10,12 @@ from typing import Any
 
 from enshittify_languages import RepositoryInspection
 from enshittify_protocol import AgentRunSummary, ModelUsage
-from enshittify_providers import ModelProvider
+from enshittify_providers import CodxProvider, ModelProvider
 from enshittify_tools.agent import AgentWorkspaceSession
 from enshittify_tools.catalog import iter_mutation_tool_specs
 from enshittify_tools.result import ToolChainResult
 
+from enshittify_core.harness.codx_loop import run_codx_harness
 from enshittify_core.harness.create_harness import create_harness
 from enshittify_core.harness.model_loop import run_model_harness
 
@@ -223,12 +224,13 @@ def run_agent_execution(
     intensity: str,
     budget: int | None,
     dry_run: bool,
-    provider: ModelProvider,
+    provider: ModelProvider | CodxProvider,
     mode: str,
     allow_rewrites: bool,
     max_agent_steps: int,
     max_read_chars: int,
     instruction: str | None,
+    artifact_root: Path,
 ) -> ExecutionResult:
     """Run the model tool loop and optional deterministic budget fill."""
     effective_budget = budget or _default_agent_budget(len(candidate_paths), intensity)
@@ -258,13 +260,27 @@ def run_agent_execution(
     ]
 
     if candidate_paths:
-        agent = run_model_harness(
-            session,
-            provider,
-            mode=mode,
-            max_agent_steps=max_agent_steps,
-            instruction=instruction,
-        )
+        if isinstance(provider, CodxProvider):
+            agent = run_codx_harness(
+                session,
+                provider,
+                mode=mode,
+                max_agent_steps=max_agent_steps,
+                instruction=instruction,
+                artifact_root=artifact_root,
+            )
+            # Codx runs the MCP server in a child process. Import its ledger into
+            # the parent session so hybrid fallback, reports, and changed-path
+            # accounting see the same actions as the native LangChain loop.
+            session.actions.extend(agent.actions)
+        else:
+            agent = run_model_harness(
+                session,
+                provider,
+                mode=mode,
+                max_agent_steps=max_agent_steps,
+                instruction=instruction,
+            )
     else:
         agent = AgentRunSummary(
             mode=mode,

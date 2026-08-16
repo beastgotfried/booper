@@ -44,6 +44,28 @@ model choose targeted actions and fills unused mutation budget with the
 deterministic tools. The harness writes only to its isolated workspace and
 returns a machine-readable report, patch, and optional archive.
 
+## Codx-backed agent run
+
+Use the authorized local Codx wrapper without supplying an API key:
+
+```python
+from enshittify_sdk import Enshittify
+
+result = Enshittify(
+    provider="codx",
+    mode="hybrid",
+    codx_timeout=1800,
+).run_repository(
+    "./my-repository",
+    budget=12,
+    output="archive",
+)
+```
+
+The SDK starts the wrapper's non-interactive `exec --json` path and connects a short-lived
+enshittify MCP server. A manually launched interactive `codx --yolo` command may ask for Enter;
+that prompt is not used by this adapter.
+
 ## Custom LangChain models
 
 Any compatible LangChain chat model can be adapted without changing the core

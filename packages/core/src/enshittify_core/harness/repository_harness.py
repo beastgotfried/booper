@@ -14,7 +14,7 @@ from enshittify_backends import PreparedWorkspace
 from enshittify_backends.artifacts import archive_directory, write_json, write_text
 from enshittify_languages import inspect_repository, iter_python_files
 from enshittify_profiles import get_profile
-from enshittify_providers import ModelProvider
+from enshittify_providers import CodxProvider, ModelProvider
 from enshittify_tools.catalog import list_mutation_tool_names
 
 from enshittify_core.harness.execution import (
@@ -120,6 +120,14 @@ def _render_markdown(report: dict[str, Any]) -> str:
     ]
     if artifacts.get("archive"):
         lines.append(f"- Workspace archive: `{artifacts['archive']}`")
+    if artifacts.get("codx_session"):
+        lines.extend(
+            [
+                f"- Codx MCP session: `{artifacts['codx_session']}`",
+                f"- Codx action state: `{artifacts['codx_state']}`",
+                f"- Codx final message: `{artifacts['codx_last_message']}`",
+            ]
+        )
 
     if report["agent"]:
         agent = report["agent"]
@@ -180,7 +188,7 @@ class RepositoryHarness:
         tools: Iterable[str] | None = None,
         output: str = "workspace",
         max_file_bytes: int = 1_000_000,
-        provider: ModelProvider | None = None,
+        provider: ModelProvider | CodxProvider | None = None,
         mode: str = "deterministic",
         allow_llm_rewrites: bool = True,
         max_agent_steps: int = 24,
@@ -250,6 +258,7 @@ class RepositoryHarness:
                 max_agent_steps=max_agent_steps,
                 max_read_chars=max_agent_read_chars,
                 instruction=instruction,
+                artifact_root=workspace.artifacts_dir,
             )
 
         events: list[dict[str, Any]] = [
@@ -318,6 +327,27 @@ class RepositoryHarness:
         report_markdown_path = workspace.artifacts_dir / "report.md"
         events_path = workspace.artifacts_dir / "events.jsonl"
         manifest_path = workspace.artifacts_dir / "manifest.json"
+        artifact_paths: dict[str, str | None] = {
+            "workspace": str(workspace.working_dir),
+            "patch": str(patch_path),
+            "report_json": str(report_json_path),
+            "report_markdown": str(report_markdown_path),
+            "events": str(events_path),
+            "manifest": str(manifest_path),
+            "archive": str(archive_path) if archive_path else None,
+        }
+        if isinstance(provider, CodxProvider):
+            artifact_paths.update(
+                {
+                    "codx_session": str(workspace.artifacts_dir / "codx-session.json"),
+                    "codx_state": str(
+                        workspace.artifacts_dir / "codx-session-state.json"
+                    ),
+                    "codx_last_message": str(
+                        workspace.artifacts_dir / "codx-last-message.txt"
+                    ),
+                }
+            )
         events.append(
             {
                 "at": completed_at,
@@ -376,15 +406,7 @@ class RepositoryHarness:
                 execution.agent.model_dump(mode="json") if execution.agent else None
             ),
             "warnings": warnings,
-            "artifacts": {
-                "workspace": str(workspace.working_dir),
-                "patch": str(patch_path),
-                "report_json": str(report_json_path),
-                "report_markdown": str(report_markdown_path),
-                "events": str(events_path),
-                "manifest": str(manifest_path),
-                "archive": str(archive_path) if archive_path else None,
-            },
+            "artifacts": artifact_paths,
         }
 
         manifest = {

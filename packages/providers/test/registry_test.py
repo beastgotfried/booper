@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from enshittify_providers import (
+    CodxProvider,
     ProviderConfigurationError,
     create_provider,
     list_provider_specs,
@@ -15,11 +16,24 @@ from langchain_core.messages import AIMessage
 
 
 class ProviderRegistryTests(unittest.TestCase):
-    def test_registry_exposes_deterministic_and_groq_modes(self) -> None:
+    def test_registry_exposes_deterministic_codx_and_groq_modes(self) -> None:
         self.assertEqual(
-            [spec.name for spec in list_provider_specs()], ["none", "groq"]
+            [spec.name for spec in list_provider_specs()], ["none", "codx", "groq"]
         )
         self.assertIsNone(create_provider("none"))
+
+    def test_codx_provider_uses_wrapper_without_an_api_key(self) -> None:
+        with patch(
+            "enshittify_providers.adapters.codx.shutil.which",
+            return_value="/usr/local/bin/codx",
+        ):
+            provider = create_provider("codx", codx_command="codx")
+
+        self.assertIsInstance(provider, CodxProvider)
+        assert isinstance(provider, CodxProvider)
+        self.assertEqual(provider.command, "codx")
+        self.assertTrue(provider.yolo)
+        self.assertIsNone(provider.chat_model)
 
     def test_groq_requires_a_key_without_leaking_one(self) -> None:
         with (

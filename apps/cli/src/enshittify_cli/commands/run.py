@@ -35,9 +35,9 @@ def configure(subparsers: argparse._SubParsersAction) -> None:
     )
     parser.add_argument(
         "--provider",
-        choices=("none", "groq"),
+        choices=("none", "codx", "groq"),
         default="none",
-        help="LLM provider; `none` keeps the run deterministic.",
+        help="LLM provider; `none` is deterministic and `codx` uses the local wrapper.",
     )
     parser.add_argument(
         "--model", help="Provider model ID; defaults to the provider's stable model."
@@ -63,7 +63,7 @@ def configure(subparsers: argparse._SubParsersAction) -> None:
         "--provider-timeout",
         type=float,
         default=120.0,
-        help="Timeout in seconds for each model request.",
+        help="Timeout in seconds for each native provider request.",
     )
     parser.add_argument(
         "--provider-max-retries",
@@ -76,6 +76,21 @@ def configure(subparsers: argparse._SubParsersAction) -> None:
         type=int,
         default=8192,
         help="Maximum completion tokens per model call.",
+    )
+    parser.add_argument(
+        "--codx-command",
+        help="Codx wrapper executable or absolute path (default: codx or ENSHTTIFY_CODX_COMMAND).",
+    )
+    parser.add_argument(
+        "--codx-timeout",
+        type=float,
+        default=1_800.0,
+        help="Maximum seconds for one non-interactive Codx run.",
+    )
+    parser.add_argument(
+        "--codx-no-yolo",
+        action="store_true",
+        help="Do not pass Codex --yolo; mutation calls may require interactive approval.",
     )
     parser.add_argument(
         "--agent-steps",
@@ -135,7 +150,7 @@ def configure(subparsers: argparse._SubParsersAction) -> None:
 
 def handle(args: argparse.Namespace) -> int:
     api_key = None
-    if args.provider != "none" and args.mode != "deterministic":
+    if args.provider == "groq" and args.mode != "deterministic":
         api_key_env = args.api_key_env or "GROQ_API_KEY"
         api_key = os.getenv(api_key_env)
         if not api_key:
@@ -153,6 +168,9 @@ def handle(args: argparse.Namespace) -> int:
         provider_timeout=args.provider_timeout,
         provider_max_retries=args.provider_max_retries,
         provider_max_tokens=args.provider_max_tokens,
+        codx_command=args.codx_command,
+        codx_timeout=args.codx_timeout,
+        codx_yolo=not args.codx_no_yolo,
         mode=args.mode,
         allow_llm_rewrites=not args.no_llm_rewrites,
         max_agent_steps=args.agent_steps,

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from enshittify_backends import prepare_workspace
 from enshittify_core import RepositoryHarness, RepositoryRunResult
-from enshittify_providers import ModelProvider, create_provider
+from enshittify_providers import CodxProvider, ModelProvider, create_provider
 
 from enshittify_sdk.config import EnshittifyConfig
 
@@ -19,7 +19,7 @@ class Enshittify:
         self,
         *,
         output_root: str | Path | None = None,
-        provider: str | ModelProvider = "none",
+        provider: str | ModelProvider | CodxProvider = "none",
         api_key: str | None = None,
         model: str | None = None,
         temperature: float = 0.0,
@@ -30,6 +30,9 @@ class Enshittify:
         allow_llm_rewrites: bool = True,
         max_agent_steps: int = 24,
         max_agent_read_chars: int = 24_000,
+        codx_command: str | None = None,
+        codx_timeout: float = 1_800.0,
+        codx_yolo: bool = True,
     ) -> None:
         self.config = EnshittifyConfig(
             output_root=Path(output_root).expanduser() if output_root else None,
@@ -44,6 +47,9 @@ class Enshittify:
             allow_llm_rewrites=allow_llm_rewrites,
             max_agent_steps=max_agent_steps,
             max_agent_read_chars=max_agent_read_chars,
+            codx_command=codx_command,
+            codx_timeout=codx_timeout,
+            codx_yolo=codx_yolo,
         )
 
     def run_repository(
@@ -119,7 +125,7 @@ class Enshittify:
             return "deterministic"
         return "hybrid"
 
-    def _resolve_provider(self, mode: str) -> ModelProvider | None:
+    def _resolve_provider(self, mode: str) -> ModelProvider | CodxProvider | None:
         if mode == "deterministic":
             return None
         provider = create_provider(
@@ -130,6 +136,9 @@ class Enshittify:
             timeout=self.config.provider_timeout,
             max_retries=self.config.provider_max_retries,
             max_tokens=self.config.provider_max_tokens,
+            codx_command=self.config.codx_command,
+            codx_timeout=self.config.codx_timeout,
+            codx_yolo=self.config.codx_yolo,
         )
         if provider is None:
             raise ValueError(f"Harness mode `{mode}` requires an LLM provider.")

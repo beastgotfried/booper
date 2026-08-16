@@ -12,7 +12,8 @@ path traversal.
 The Groq adapter reads `GROQ_API_KEY` or receives a key from the in-process SDK. The CLI does not
 accept raw keys as arguments. Provider descriptors contain only provider name, model ID, and
 capabilities. Reports, manifests, event streams, prompts, and errors never intentionally include a
-key, and common provider-key patterns are redacted from captured errors.
+key, and common provider-key patterns are redacted from captured errors. Codx runs do not accept or
+copy a second key; they invoke the user's authorized local wrapper and inherit its authentication.
 
 ## Data Egress
 
@@ -20,6 +21,12 @@ Deterministic runs make no model calls. In agent or hybrid mode, repository meta
 bounded source returned by `read_source`, and bounded diffs can be sent to the selected provider.
 Users must treat this as source-code disclosure to that provider and should not enable a hosted
 model for repositories whose policy prohibits it.
+
+For Codx, the process boundary is local but the wrapper may use its own network and account policy.
+The harness configures a short-lived stdio MCP server and stages the writable workspace separately
+from the untouched original. `--yolo` is used by default so destructive MCP calls can proceed
+without an interactive approval prompt; users should only enable it for repositories they are
+authorized to process.
 
 ## Prompt Injection
 

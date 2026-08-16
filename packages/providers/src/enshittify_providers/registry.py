@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from enshittify_providers.adapters.codx import (
+    DEFAULT_CODX_MODEL,
+    CodxProvider,
+    create_codx_provider,
+)
 from enshittify_providers.adapters.groq import (
     DEFAULT_GROQ_MODEL,
     GROQ_API_KEY_ENV,
@@ -29,6 +34,12 @@ PROVIDER_SPECS = (
         api_key_env=None,
     ),
     ProviderSpec(
+        name="codx",
+        description="Drive the isolated workspace through the local Codx CLI wrapper.",
+        default_model=DEFAULT_CODX_MODEL,
+        api_key_env=None,
+    ),
+    ProviderSpec(
         name="groq",
         description="Run the model-directed harness through GroqCloud.",
         default_model=DEFAULT_GROQ_MODEL,
@@ -42,7 +53,7 @@ def list_provider_specs() -> list[ProviderSpec]:
 
 
 def create_provider(
-    provider: str | ModelProvider,
+    provider: str | ModelProvider | CodxProvider,
     *,
     api_key: str | None = None,
     model: str | None = None,
@@ -50,7 +61,10 @@ def create_provider(
     timeout: float = 120.0,
     max_retries: int = 2,
     max_tokens: int = 8192,
-) -> ModelProvider | None:
+    codx_command: str | None = None,
+    codx_timeout: float = 1_800.0,
+    codx_yolo: bool = True,
+) -> ModelProvider | CodxProvider | None:
     """Resolve a built-in provider name or accept an already wrapped provider."""
     if not isinstance(provider, str):
         return provider
@@ -58,6 +72,13 @@ def create_provider(
     name = normalize_provider_name(provider)
     if name == "none":
         return None
+    if name == "codx":
+        return create_codx_provider(
+            command=codx_command,
+            model=model,
+            timeout=codx_timeout,
+            yolo=codx_yolo,
+        )
     if name == "groq":
         return create_groq_provider(
             api_key=api_key,

@@ -44,7 +44,7 @@ class CliTests(unittest.TestCase):
             self.assertTrue(Path(payload["artifacts"]["patch"]).is_file())
             self.assertTrue(Path(payload["artifacts"]["report"]).is_file())
 
-    def test_providers_command_lists_groq(self) -> None:
+    def test_providers_command_lists_codx_and_groq(self) -> None:
         from enshittify_cli.main import main
 
         output = StringIO()
@@ -53,7 +53,61 @@ class CliTests(unittest.TestCase):
 
         payload = json.loads(output.getvalue())
         self.assertEqual(exit_code, 0)
-        self.assertEqual([item["name"] for item in payload], ["none", "groq"])
+        self.assertEqual([item["name"] for item in payload], ["none", "codx", "groq"])
+
+    def test_codx_run_does_not_require_an_api_key(self) -> None:
+        from enshittify_cli.main import main
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            (source / "main.py").write_text("value = 1\n", encoding="utf-8")
+            with patch("enshittify_cli.commands.run.Enshittify") as client_type:
+                client_type.return_value.run_repository.return_value.status = (
+                    "completed"
+                )
+                client_type.return_value.run_repository.return_value.report = {
+                    "configuration": {
+                        "profile": "maximum",
+                        "intensity": "high",
+                        "mode": "agent",
+                        "provider": {"name": "codx", "model": "codex-default"},
+                    },
+                    "summary": {
+                        "changed_files": [],
+                        "candidate_files": 1,
+                        "attempted_tool_invocations": 0,
+                        "badness_score": 0,
+                    },
+                    "agent": None,
+                    "warnings": [],
+                }
+                client_type.return_value.run_repository.return_value.run_id = "test"
+                client_type.return_value.run_repository.return_value.workspace_dir = (
+                    root
+                )
+                client_type.return_value.run_repository.return_value.patch_path = (
+                    root / "patch.diff"
+                )
+                client_type.return_value.run_repository.return_value.report_path = (
+                    root / "report.json"
+                )
+                client_type.return_value.run_repository.return_value.archive_path = None
+                exit_code = main(
+                    [
+                        "run",
+                        str(source),
+                        "--provider",
+                        "codx",
+                        "--mode",
+                        "agent",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(client_type.call_args.kwargs["provider"], "codx")
+        self.assertIsNone(client_type.call_args.kwargs["api_key"])
 
     def test_groq_run_requires_key_environment_variable(self) -> None:
         from enshittify_cli.main import main

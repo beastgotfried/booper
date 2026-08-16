@@ -918,7 +918,7 @@ Important flags for `run`:
 --profile TEXT
 --intensity low|medium|high|maximum
 --budget INTEGER
---provider openai|anthropic|grok|local|none
+--provider codx|openai|anthropic|grok|local|none
 --model TEXT
 --ref TEXT
 --output patch|branch|pull-request|archive|workspace
@@ -978,6 +978,7 @@ class Provider:
 Supported provider modes:
 
 - `none`: deterministic tool planning only.
+- `codx`: authorized local Codx CLI agent connected through a short-lived stdio MCP server.
 - `groq`: GroqCloud-hosted model through `langchain-groq`.
 - `openai`: OpenAI model.
 - `anthropic`: Claude model.
@@ -990,6 +991,10 @@ Use provider calls for:
 - explaining report results
 - judging whether a mutation made code worse
 - generating targeted naming or architecture degradation ideas
+
+Codx is the process-backed exception to the chat-model provider interface. Its adapter invokes the
+non-interactive `codx exec --json` command and exposes the same session-bound tool surface through
+MCP; it does not require a second API-key field in the SDK.
 
 Do not require an LLM for every mutation. The deterministic tool system should be strong enough to run without one.
 

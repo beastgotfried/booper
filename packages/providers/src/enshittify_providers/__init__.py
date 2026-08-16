@@ -1,5 +1,13 @@
 """Provider-neutral LLM integration for enshittify.dev."""
 
+from enshittify_providers.adapters.codx import (
+    CODX_COMMAND_ENV,
+    CODX_MODEL_ENV,
+    DEFAULT_CODX_COMMAND,
+    DEFAULT_CODX_MODEL,
+    CodxProvider,
+    create_codx_provider,
+)
 from enshittify_providers.base import (
     LangChainModelProvider,
     ModelProvider,
@@ -18,6 +26,11 @@ from enshittify_providers.registry import (
 )
 
 __all__ = [
+    "CODX_COMMAND_ENV",
+    "CODX_MODEL_ENV",
+    "DEFAULT_CODX_COMMAND",
+    "DEFAULT_CODX_MODEL",
+    "CodxProvider",
     "LangChainModelProvider",
     "ModelProvider",
     "ProviderCapabilities",
@@ -25,6 +38,7 @@ __all__ = [
     "ProviderDependencyError",
     "ProviderError",
     "ProviderSpec",
+    "create_codx_provider",
     "create_provider",
     "list_provider_specs",
     "wrap_chat_model",

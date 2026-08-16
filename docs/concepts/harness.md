@@ -10,7 +10,8 @@ loop, deterministic fallback, validation, event recording, and artifacts.
 2. `enshittify_languages` identifies eligible Python files and excludes tests unless requested.
 3. A profile resolves to an ordered allowlist drawn from the 21 mutation tools.
 4. Deterministic mode applies that list directly through the existing LangGraph chain.
-5. Agent and hybrid modes compile a LangChain agent to LangGraph with five workspace-scoped tools.
+5. Agent and hybrid modes use either a LangChain agent compiled to LangGraph or the Codx adapter;
+   both receive the same five workspace-scoped tools.
 6. Every mutation is budgeted and every resulting Python file is parsed before it is written.
 7. Hybrid mode spends any remaining budget through the deterministic engine.
 8. The shared reporter writes hashes, actions, events, patch, report, manifest, and optional archive.
@@ -33,5 +34,6 @@ tool loop. `hybrid` combines context-aware model decisions with guaranteed deter
 fill. `auto` is a client-level convenience that selects deterministic or hybrid based on whether a
 provider exists.
 
-The provider is deliberately smaller than the harness. It supplies a tool-calling LangChain chat
-model plus safe metadata. All policy and execution behavior stays provider-neutral.
+The provider is deliberately smaller than the harness. Native providers supply a tool-calling
+LangChain chat model plus safe metadata. Codx supplies an authorized external process through
+`codx exec --json` and stdio MCP. All policy and execution behavior stays provider-neutral.

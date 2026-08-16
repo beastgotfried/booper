@@ -3,6 +3,7 @@
 import re
 
 PROVIDER_ALIASES = {
+    "codex": "codx",
     "disabled": "none",
     "groqcloud": "groq",
     "off": "none",
