@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+
 from langchain.tools import tool
 
 from enshittify_tools.result import MutationEdit, MutationResult
@@ -13,7 +14,10 @@ class _ErrorHandlingDegrader(ast.NodeTransformer):
         self.edits: list[MutationEdit] = []
 
     def visit_ExceptHandler(self, node: ast.ExceptHandler) -> ast.ExceptHandler:
-        if isinstance(node.type, ast.Name) and node.type.id not in {"Exception", "BaseException"}:
+        if isinstance(node.type, ast.Name) and node.type.id not in {
+            "Exception",
+            "BaseException",
+        }:
             old_type = node.type.id
             node.type = ast.Name(id="Exception", ctx=ast.Load())
             self.edits.append(
@@ -33,7 +37,9 @@ class _ErrorHandlingDegrader(ast.NodeTransformer):
             return node
 
         first_arg = node.exc.args[0]
-        if not isinstance(first_arg, ast.Constant) or not isinstance(first_arg.value, str):
+        if not isinstance(first_arg, ast.Constant) or not isinstance(
+            first_arg.value, str
+        ):
             return node
 
         old_message = first_arg.value

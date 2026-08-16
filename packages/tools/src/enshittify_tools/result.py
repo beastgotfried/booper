@@ -58,11 +58,7 @@ class ToolChainResult:
 
     @property
     def warnings(self) -> list[str]:
-        return [
-            warning
-            for run in self.runs
-            for warning in run.result.warnings
-        ]
+        return [warning for run in self.runs for warning in run.result.warnings]
 
     def to_dict(self) -> dict[str, Any]:
         return {

@@ -19,14 +19,25 @@ class _InlineCandidate:
 
 
 def _candidate_from_function(node: ast.FunctionDef) -> _InlineCandidate | None:
-    if node.decorator_list or len(node.body) != 1 or not isinstance(node.body[0], ast.Return):
+    if (
+        node.decorator_list
+        or len(node.body) != 1
+        or not isinstance(node.body[0], ast.Return)
+    ):
         return None
-    if node.args.vararg or node.args.kwarg or node.args.kwonlyargs or node.args.posonlyargs:
+    if (
+        node.args.vararg
+        or node.args.kwarg
+        or node.args.kwonlyargs
+        or node.args.posonlyargs
+    ):
         return None
     if node.body[0].value is None:
         return None
     parameters = [argument.arg for argument in node.args.args]
-    return _InlineCandidate(name=node.name, parameters=parameters, expression=node.body[0].value)
+    return _InlineCandidate(
+        name=node.name, parameters=parameters, expression=node.body[0].value
+    )
 
 
 class _ParameterSubstituter(ast.NodeTransformer):
@@ -64,7 +75,9 @@ class _AbstractionInliner(ast.NodeTransformer):
             return node
 
         replacements = dict(zip(candidate.parameters, node.args, strict=True))
-        inlined = _ParameterSubstituter(replacements).visit(copy.deepcopy(candidate.expression))
+        inlined = _ParameterSubstituter(replacements).visit(
+            copy.deepcopy(candidate.expression)
+        )
         ast.copy_location(inlined, node)
         self.edit = MutationEdit(
             kind="inline_useful_abstraction",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import copy
+
 from langchain.tools import tool
 
 from enshittify_tools.result import MutationEdit, MutationResult
@@ -16,7 +17,9 @@ def _collect_names(tree: ast.AST) -> set[str]:
 def _temp_name(used_names: set[str]) -> str:
     index = 0
     while True:
-        candidate = "_control_flow_result" if index == 0 else f"_control_flow_result_{index}"
+        candidate = (
+            "_control_flow_result" if index == 0 else f"_control_flow_result_{index}"
+        )
         if candidate not in used_names:
             return candidate
         index += 1
@@ -65,7 +68,9 @@ class _ControlFlowRewriter(ast.NodeTransformer):
                         )
                     ],
                 )
-                final_return = ast.Return(value=ast.Name(id=self.temp_name, ctx=ast.Load()))
+                final_return = ast.Return(
+                    value=ast.Name(id=self.temp_name, ctx=ast.Load())
+                )
 
                 ast.copy_location(initializer, statement)
                 ast.copy_location(rewritten_if, statement)
@@ -91,7 +96,9 @@ class _ControlFlowRewriter(ast.NodeTransformer):
             self.generic_visit(node)
         return node
 
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AsyncFunctionDef:
+    def visit_AsyncFunctionDef(
+        self, node: ast.AsyncFunctionDef
+    ) -> ast.AsyncFunctionDef:
         node.body = self._rewrite_body(node.body)
         if self.edit is None:
             self.generic_visit(node)

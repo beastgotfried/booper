@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import ast
+
 from langchain.tools import tool
 
 from enshittify_tools.result import MutationEdit, MutationResult
-
 
 _GENERATED_HELPER = "_unused_legacy_compatibility_path"
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+
 from langchain.tools import tool
 
 from enshittify_tools.result import MutationEdit, MutationResult
@@ -16,7 +17,11 @@ def _ordered_names(expression: ast.AST) -> list[str]:
     names: list[str] = []
     seen: set[str] = set()
     for node in ast.walk(expression):
-        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) and node.id not in seen:
+        if (
+            isinstance(node, ast.Name)
+            and isinstance(node.ctx, ast.Load)
+            and node.id not in seen
+        ):
             names.append(node.id)
             seen.add(node.id)
     return names
@@ -78,7 +83,9 @@ def _insertion_index(tree: ast.Module) -> int:
         value = tree.body[0].value
         if isinstance(value, ast.Constant) and isinstance(value.value, str):
             index = 1
-    while index < len(tree.body) and isinstance(tree.body[index], (ast.Import, ast.ImportFrom)):
+    while index < len(tree.body) and isinstance(
+        tree.body[index], (ast.Import, ast.ImportFrom)
+    ):
         index += 1
     return index
 

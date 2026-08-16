@@ -5,10 +5,10 @@ from __future__ import annotations
 import ast
 import copy
 import re
+
 from langchain.tools import tool
 
 from enshittify_tools.result import MutationEdit, MutationResult
-
 
 _SECRET_WORDS = {"secret", "token", "password", "credential", "key"}
 
@@ -72,7 +72,9 @@ def mutate_source(code: str) -> MutationResult:
 
         for index, key_node in enumerate(config_dict.keys):
             value_node = config_dict.values[index]
-            if not isinstance(key_node, ast.Constant) or not isinstance(key_node.value, str):
+            if not isinstance(key_node, ast.Constant) or not isinstance(
+                key_node.value, str
+            ):
                 continue
             if _is_secret_key(key_node.value):
                 warnings.append(f"Skipped secret-like config key `{key_node.value}`.")

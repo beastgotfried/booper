@@ -9,7 +9,11 @@ from enshittify_core.state.session import HarnessState
 
 
 def _apply_mutation_tools(state: HarnessState) -> dict[str, object]:
-    result = run_tool_chain(state["tool_names"], state["code"])
+    result = run_tool_chain(
+        state["tool_names"],
+        state["code"],
+        continue_on_error=state.get("continue_on_error", False),
+    )
     return {
         "code": result.code,
         "result": result,

@@ -10,5 +10,6 @@ from enshittify_tools.result import ToolChainResult
 class HarnessState(TypedDict):
     code: str
     tool_names: list[str]
+    continue_on_error: NotRequired[bool]
     result: NotRequired[ToolChainResult]
     warnings: NotRequired[list[str]]

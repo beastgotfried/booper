@@ -9,7 +9,7 @@ from pathlib import Path
 
 def _install_langchain_stub_if_missing() -> None:
     try:
-        import langchain.tools  # noqa: F401
+        import langchain.tools
     except ModuleNotFoundError:
         langchain = types.ModuleType("langchain")
         langchain_tools = types.ModuleType("langchain.tools")
@@ -64,7 +64,9 @@ class ExecutorTests(unittest.TestCase):
 
         self.assertTrue(chain.changed)
         self.assertIn("_unused_legacy_compatibility_path", chain.code)
-        self.assertEqual([run.name for run in chain.runs], ["degrade_naming", "inject_dead_code"])
+        self.assertEqual(
+            [run.name for run in chain.runs], ["degrade_naming", "inject_dead_code"]
+        )
         self.assertGreaterEqual(len(chain.warnings), 0)
         self.assertTrue(hasattr(chain, "to_dict"))
         ast.parse(chain.code)

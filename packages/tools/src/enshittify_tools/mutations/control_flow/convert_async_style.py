@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import copy
+
 from langchain.tools import tool
 
 from enshittify_tools.result import MutationEdit, MutationResult
@@ -16,7 +17,9 @@ def _collect_names(node: ast.AST) -> set[str]:
 def _helper_name(used_names: set[str]) -> str:
     index = 0
     while True:
-        candidate = "_async_style_delegate" if index == 0 else f"_async_style_delegate_{index}"
+        candidate = (
+            "_async_style_delegate" if index == 0 else f"_async_style_delegate_{index}"
+        )
         if candidate not in used_names:
             return candidate
         index += 1
@@ -26,7 +29,9 @@ class _AsyncStyleConverter(ast.NodeTransformer):
     def __init__(self) -> None:
         self.edit: MutationEdit | None = None
 
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AsyncFunctionDef:
+    def visit_AsyncFunctionDef(
+        self, node: ast.AsyncFunctionDef
+    ) -> ast.AsyncFunctionDef:
         if self.edit is not None:
             return node
 
@@ -67,7 +72,9 @@ class _AsyncStyleConverter(ast.NodeTransformer):
                 )
             ),
         )
-        final_return = ast.Return(value=ast.Name(id="_async_style_result", ctx=ast.Load()))
+        final_return = ast.Return(
+            value=ast.Name(id="_async_style_result", ctx=ast.Load())
+        )
 
         ast.copy_location(helper, node.body[0])
         ast.copy_location(result_assignment, node.body[0])

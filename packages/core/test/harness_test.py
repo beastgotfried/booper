@@ -49,7 +49,9 @@ class HarnessTests(unittest.TestCase):
         )
 
         self.assertIn("data", result["code"])
-        self.assertEqual([run.name for run in result["result"].runs], ["degrade_naming"])
+        self.assertEqual(
+            [run.name for run in result["result"].runs], ["degrade_naming"]
+        )
 
 
 if __name__ == "__main__":

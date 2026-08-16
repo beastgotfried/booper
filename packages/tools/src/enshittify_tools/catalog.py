@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 from enshittify_tools.mutations.architecture.merge_unrelated_modules import (
     merge_unrelated_modules,

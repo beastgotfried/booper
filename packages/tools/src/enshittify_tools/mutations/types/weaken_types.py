@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+
 from langchain.tools import tool
 
 from enshittify_tools.result import MutationEdit, MutationResult
@@ -14,9 +15,12 @@ def _is_any_annotation(annotation: ast.expr | None) -> bool:
 
 def _has_any_import(tree: ast.Module) -> bool:
     for statement in tree.body:
-        if isinstance(statement, ast.ImportFrom) and statement.module == "typing":
-            if any(alias.name == "Any" for alias in statement.names):
-                return True
+        if (
+            isinstance(statement, ast.ImportFrom)
+            and statement.module == "typing"
+            and any(alias.name == "Any" for alias in statement.names)
+        ):
+            return True
     return False
 
 
@@ -40,7 +44,9 @@ class _TypeWeakener(ast.NodeTransformer):
     def __init__(self) -> None:
         self.edits: list[MutationEdit] = []
 
-    def _weaken_annotation(self, annotation: ast.expr | None, line: int | None, kind: str) -> ast.expr | None:
+    def _weaken_annotation(
+        self, annotation: ast.expr | None, line: int | None, kind: str
+    ) -> ast.expr | None:
         if annotation is None or _is_any_annotation(annotation):
             return annotation
 
@@ -72,7 +78,9 @@ class _TypeWeakener(ast.NodeTransformer):
         )
         return node
 
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AsyncFunctionDef:
+    def visit_AsyncFunctionDef(
+        self, node: ast.AsyncFunctionDef
+    ) -> ast.AsyncFunctionDef:
         self.generic_visit(node)
         node.returns = self._weaken_annotation(
             node.returns,

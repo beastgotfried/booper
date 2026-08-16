@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import ast
+
 from langchain.tools import tool
 
 from enshittify_tools.result import MutationEdit, MutationResult
-
 
 _AGGREGATOR_NAME = "MixedResponsibilityJunkDrawer"
 
@@ -32,7 +32,10 @@ def mutate_source(code: str) -> MutationResult:
             warnings=[f"SyntaxError on line {error.lineno}: {error.msg}"],
         )
 
-    if any(isinstance(statement, ast.ClassDef) and statement.name == _AGGREGATOR_NAME for statement in tree.body):
+    if any(
+        isinstance(statement, ast.ClassDef) and statement.name == _AGGREGATOR_NAME
+        for statement in tree.body
+    ):
         return MutationResult(
             code=code,
             changed=False,
@@ -48,7 +51,9 @@ def mutate_source(code: str) -> MutationResult:
             changed=False,
             summary="At least two public top-level functions are required for this source-level merge.",
             edits=[],
-            warnings=["True module merging requires the filesystem backend and rollback metadata."],
+            warnings=[
+                "True module merging requires the filesystem backend and rollback metadata."
+            ],
         )
 
     selected = functions[:2]
@@ -71,7 +76,9 @@ def mutate_source(code: str) -> MutationResult:
                 line=None,
             )
         ],
-        warnings=["This is a source-level stand-in for future workspace-level module merging."],
+        warnings=[
+            "This is a source-level stand-in for future workspace-level module merging."
+        ],
     )
 
 

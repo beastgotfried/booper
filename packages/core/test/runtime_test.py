@@ -28,7 +28,9 @@ class RuntimeTests(unittest.TestCase):
         )
 
         self.assertTrue(result.changed)
-        self.assertEqual([run.name for run in result.runs], ["degrade_naming", "collapse_formatting"])
+        self.assertEqual(
+            [run.name for run in result.runs], ["degrade_naming", "collapse_formatting"]
+        )
         self.assertIn("data", result.code)
         self.assertFalse("\n\n" in result.code)
         import ast
@@ -39,7 +41,9 @@ class RuntimeTests(unittest.TestCase):
     def test_execute_mutations_serializes_to_dict(self) -> None:
         from enshittify_core.runtime.executor import execute_mutations
 
-        result = execute_mutations(["degrade_naming"], "def f(value):\n    return value\n")
+        result = execute_mutations(
+            ["degrade_naming"], "def f(value):\n    return value\n"
+        )
         payload = result.to_dict()
 
         self.assertEqual(payload["code"], result.code)

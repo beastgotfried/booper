@@ -5,10 +5,10 @@ from __future__ import annotations
 import ast
 import builtins
 import keyword
+
 from langchain.tools import tool
 
 from enshittify_tools.result import MutationEdit, MutationResult
-
 
 _RESERVED_NAMES = {
     *dir(builtins),
@@ -23,9 +23,7 @@ def _should_rename(name: str, blocked_names: set[str]) -> bool:
         return False
     if not name.isidentifier() or keyword.iskeyword(name):
         return False
-    if name.startswith("__") and name.endswith("__"):
-        return False
-    return True
+    return not (name.startswith("__") and name.endswith("__"))
 
 
 def _make_obfuscated_name(index: int, blocked_names: set[str]) -> str:

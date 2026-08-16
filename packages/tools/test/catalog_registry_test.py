@@ -6,7 +6,6 @@ import types
 import unittest
 from pathlib import Path
 
-
 EXPECTED_MUTATION_TOOL_NAMES = [
     "obfuscate_identifiers",
     "encode_literals",
@@ -34,7 +33,7 @@ EXPECTED_MUTATION_TOOL_NAMES = [
 
 def _install_langchain_stub_if_missing() -> None:
     try:
-        import langchain.tools  # noqa: F401
+        import langchain.tools
     except ModuleNotFoundError:
         langchain = types.ModuleType("langchain")
         langchain_tools = types.ModuleType("langchain.tools")
@@ -77,7 +76,9 @@ class CatalogRegistryTests(unittest.TestCase):
 
         for spec in iter_mutation_tool_specs():
             with self.subTest(tool=spec.name):
-                tool_name = getattr(spec.tool, "name", getattr(spec.tool, "__name__", None))
+                tool_name = getattr(
+                    spec.tool, "name", getattr(spec.tool, "__name__", None)
+                )
 
                 self.assertEqual(tool_name, spec.name)
                 self.assertTrue(spec.pack)
@@ -92,8 +93,7 @@ class CatalogRegistryTests(unittest.TestCase):
         selected = registry.select_tools(["degrade_naming", "collapse_formatting"])
 
         selected_names = [
-            getattr(tool, "name", getattr(tool, "__name__", None))
-            for tool in selected
+            getattr(tool, "name", getattr(tool, "__name__", None)) for tool in selected
         ]
         self.assertEqual(selected_names, ["degrade_naming", "collapse_formatting"])
 

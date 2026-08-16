@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import copy
+
 from langchain.tools import tool
 
 from enshittify_tools.result import MutationEdit, MutationResult
@@ -29,7 +30,9 @@ class _AliasChainIntroducer(ast.NodeTransformer):
         self.second_alias = second_alias
         self.edit: MutationEdit | None = None
 
-    def _chain_for_value(self, value: ast.Name, line: int | None) -> tuple[list[ast.stmt], ast.Name]:
+    def _chain_for_value(
+        self, value: ast.Name, line: int | None
+    ) -> tuple[list[ast.stmt], ast.Name]:
         first_assignment = ast.Assign(
             targets=[ast.Name(id=self.first_alias, ctx=ast.Store())],
             value=copy.deepcopy(value),
@@ -44,7 +47,9 @@ class _AliasChainIntroducer(ast.NodeTransformer):
             after=f"{self.first_alias} -> {self.second_alias}",
             line=line,
         )
-        return [first_assignment, second_assignment], ast.Name(id=self.second_alias, ctx=ast.Load())
+        return [first_assignment, second_assignment], ast.Name(
+            id=self.second_alias, ctx=ast.Load()
+        )
 
     def _visit_body(self, body: list[ast.stmt]) -> list[ast.stmt]:
         if self.edit is not None:
@@ -52,15 +57,27 @@ class _AliasChainIntroducer(ast.NodeTransformer):
 
         new_body: list[ast.stmt] = []
         for statement in body:
-            if self.edit is None and isinstance(statement, ast.Assign) and isinstance(statement.value, ast.Name):
-                chain, replacement = self._chain_for_value(statement.value, getattr(statement, "lineno", None))
+            if (
+                self.edit is None
+                and isinstance(statement, ast.Assign)
+                and isinstance(statement.value, ast.Name)
+            ):
+                chain, replacement = self._chain_for_value(
+                    statement.value, getattr(statement, "lineno", None)
+                )
                 statement.value = replacement
                 new_body.extend(chain)
                 new_body.append(statement)
                 continue
 
-            if self.edit is None and isinstance(statement, ast.Return) and isinstance(statement.value, ast.Name):
-                chain, replacement = self._chain_for_value(statement.value, getattr(statement, "lineno", None))
+            if (
+                self.edit is None
+                and isinstance(statement, ast.Return)
+                and isinstance(statement.value, ast.Name)
+            ):
+                chain, replacement = self._chain_for_value(
+                    statement.value, getattr(statement, "lineno", None)
+                )
                 statement.value = replacement
                 new_body.extend(chain)
                 new_body.append(statement)
@@ -76,7 +93,9 @@ class _AliasChainIntroducer(ast.NodeTransformer):
             self.generic_visit(node)
         return node
 
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AsyncFunctionDef:
+    def visit_AsyncFunctionDef(
+        self, node: ast.AsyncFunctionDef
+    ) -> ast.AsyncFunctionDef:
         node.body = self._visit_body(node.body)
         if self.edit is None:
             self.generic_visit(node)

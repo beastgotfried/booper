@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import copy
+
 from langchain.tools import tool
 
 from enshittify_tools.result import MutationEdit, MutationResult
@@ -66,7 +67,9 @@ class _LogicDuplicator(ast.NodeTransformer):
             self.generic_visit(node)
         return node
 
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AsyncFunctionDef:
+    def visit_AsyncFunctionDef(
+        self, node: ast.AsyncFunctionDef
+    ) -> ast.AsyncFunctionDef:
         node.body = self._visit_body(node.body)
         if self.edit is None:
             self.generic_visit(node)

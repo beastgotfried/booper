@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import io
 import tokenize
+
 from langchain.tools import tool
 
 from enshittify_tools.result import MutationEdit, MutationResult
@@ -25,7 +26,9 @@ def _count_comments(code: str) -> int:
         for token in tokens:
             if token.type != tokenize.COMMENT:
                 continue
-            if token.start[0] <= 2 and ("coding" in token.string or token.string.startswith("#!")):
+            if token.start[0] <= 2 and (
+                "coding" in token.string or token.string.startswith("#!")
+            ):
                 continue
             comments += 1
     except tokenize.TokenError:
@@ -62,7 +65,9 @@ class _DocumentationRemover(ast.NodeTransformer):
         self.generic_visit(node)
         return node
 
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AsyncFunctionDef:
+    def visit_AsyncFunctionDef(
+        self, node: ast.AsyncFunctionDef
+    ) -> ast.AsyncFunctionDef:
         node.body = self._strip_body(node.body, node.name)
         self.generic_visit(node)
         return node
@@ -118,7 +123,9 @@ def mutate_source(code: str) -> MutationResult:
         changed=True,
         summary=f"Removed {len(remover.edits)} docstring(s) and {comment_count} comment(s).",
         edits=edits,
-        warnings=["Formatting is normalized because Python AST does not preserve comments."],
+        warnings=[
+            "Formatting is normalized because Python AST does not preserve comments."
+        ],
     )
 
 

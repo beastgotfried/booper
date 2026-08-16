@@ -11,7 +11,7 @@ from pathlib import Path
 
 def _install_langchain_stub_if_missing() -> None:
     try:
-        import langchain.tools  # noqa: F401
+        import langchain.tools
     except ModuleNotFoundError:
         langchain = types.ModuleType("langchain")
         langchain_tools = types.ModuleType("langchain.tools")
@@ -213,7 +213,11 @@ TOOL_CASES: tuple[ToolCase, ...] = (
     ToolCase(
         relative_path="naming/degrade_naming.py",
         source="def calculate_total(price, tax_rate):\n    subtotal = price + 10\n    final_total = subtotal * tax_rate\n    return final_total\n",
-        expected_fragments=("def calculate_total(data, thing):", "stuff = data + 10", "return value"),
+        expected_fragments=(
+            "def calculate_total(data, thing):",
+            "stuff = data + 10",
+            "return value",
+        ),
         expected_edit_kinds=("degrade_name",),
         forbidden_fragments=("price", "tax_rate", "subtotal", "final_total"),
     ),
@@ -227,7 +231,11 @@ TOOL_CASES: tuple[ToolCase, ...] = (
     ToolCase(
         relative_path="obfuscation/obfuscate_identifiers.py",
         source="def calculate_total(price, tax_rate):\n    subtotal = price + 10\n    final_total = subtotal * tax_rate\n    return final_total\n",
-        expected_fragments=("def calculate_total(_l, _I):", "_1 = _l + 10", "return _0"),
+        expected_fragments=(
+            "def calculate_total(_l, _I):",
+            "_1 = _l + 10",
+            "return _0",
+        ),
         expected_edit_kinds=("rename_identifier",),
         forbidden_fragments=("price", "tax_rate", "subtotal", "final_total"),
         wrapper_name="obfuscate_identifiers",
@@ -236,14 +244,25 @@ TOOL_CASES: tuple[ToolCase, ...] = (
         relative_path="obfuscation/replace_constants_with_magic_values.py",
         source="MAX_RETRIES = 3\n\ndef f():\n    return MAX_RETRIES\n",
         expected_fragments=("def f():", "return 3"),
-        expected_edit_kinds=("replace_constant_with_magic_value", "remove_constant_declaration"),
+        expected_edit_kinds=(
+            "replace_constant_with_magic_value",
+            "remove_constant_declaration",
+        ),
         forbidden_fragments=("MAX_RETRIES",),
     ),
     ToolCase(
         relative_path="types/weaken_types.py",
         source="def f(value: int) -> str:\n    result: str = str(value)\n    return result\n",
-        expected_fragments=("from typing import Any", "def f(value: Any) -> Any:", "result: Any"),
-        expected_edit_kinds=("weaken_argument_type", "weaken_variable_type", "weaken_return_type"),
+        expected_fragments=(
+            "from typing import Any",
+            "def f(value: Any) -> Any:",
+            "result: Any",
+        ),
+        expected_edit_kinds=(
+            "weaken_argument_type",
+            "weaken_variable_type",
+            "weaken_return_type",
+        ),
         forbidden_fragments=("value: int", "-> str", "result: str"),
     ),
 )
@@ -292,8 +311,14 @@ class MutationToolTests(unittest.TestCase):
                 self.assertEqual(first.summary, second.summary)
                 self.assertEqual(first.warnings, second.warnings)
                 self.assertEqual(
-                    [(edit.kind, edit.before, edit.after, edit.line) for edit in first.edits],
-                    [(edit.kind, edit.before, edit.after, edit.line) for edit in second.edits],
+                    [
+                        (edit.kind, edit.before, edit.after, edit.line)
+                        for edit in first.edits
+                    ],
+                    [
+                        (edit.kind, edit.before, edit.after, edit.line)
+                        for edit in second.edits
+                    ],
                 )
 
     def test_each_tool_handles_invalid_syntax_without_crashing(self) -> None:
@@ -307,7 +332,9 @@ class MutationToolTests(unittest.TestCase):
                 self.assertFalse(result.changed)
                 self.assertEqual(result.code, invalid_source)
                 self.assertEqual(result.edits, [])
-                self.assertTrue(any("SyntaxError" in warning for warning in result.warnings))
+                self.assertTrue(
+                    any("SyntaxError" in warning for warning in result.warnings)
+                )
 
     def test_each_langchain_wrapper_returns_mutated_code(self) -> None:
         for case in TOOL_CASES:

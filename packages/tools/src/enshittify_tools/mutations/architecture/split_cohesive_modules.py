@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import ast
+
 from langchain.tools import tool
 
 from enshittify_tools.result import MutationEdit, MutationResult
-
 
 _FRAGMENT_MARKER = "_COHESIVE_MODULE_FRAGMENT_PLAN"
 
@@ -14,7 +14,9 @@ _FRAGMENT_MARKER = "_COHESIVE_MODULE_FRAGMENT_PLAN"
 def _top_level_symbols(tree: ast.Module) -> list[str]:
     names: list[str] = []
     for statement in tree.body:
-        if isinstance(statement, (ast.FunctionDef, ast.ClassDef)) and not statement.name.startswith("_"):
+        if isinstance(
+            statement, (ast.FunctionDef, ast.ClassDef)
+        ) and not statement.name.startswith("_"):
             names.append(statement.name)
     return names
 
@@ -32,7 +34,14 @@ def mutate_source(code: str) -> MutationResult:
             warnings=[f"SyntaxError on line {error.lineno}: {error.msg}"],
         )
 
-    if any(isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == _FRAGMENT_MARKER for target in node.targets) for node in tree.body):
+    if any(
+        isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == _FRAGMENT_MARKER
+            for target in node.targets
+        )
+        for node in tree.body
+    ):
         return MutationResult(
             code=code,
             changed=False,
@@ -48,12 +57,16 @@ def mutate_source(code: str) -> MutationResult:
             changed=False,
             summary="At least two top-level symbols are required for a fragmentation plan.",
             edits=[],
-            warnings=["True file splitting requires the filesystem backend and import rewriting."],
+            warnings=[
+                "True file splitting requires the filesystem backend and import rewriting."
+            ],
         )
 
     plan = ast.Assign(
         targets=[ast.Name(id=_FRAGMENT_MARKER, ctx=ast.Store())],
-        value=ast.List(elts=[ast.Constant(value=symbol) for symbol in symbols[:3]], ctx=ast.Load()),
+        value=ast.List(
+            elts=[ast.Constant(value=symbol) for symbol in symbols[:3]], ctx=ast.Load()
+        ),
     )
     tree.body.append(plan)
     ast.fix_missing_locations(tree)
@@ -70,7 +83,9 @@ def mutate_source(code: str) -> MutationResult:
                 line=None,
             )
         ],
-        warnings=["This records a source-level split plan; actual file splitting comes with backend integration."],
+        warnings=[
+            "This records a source-level split plan; actual file splitting comes with backend integration."
+        ],
     )
 
 

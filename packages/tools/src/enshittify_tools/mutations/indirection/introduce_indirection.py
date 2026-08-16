@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+
 from langchain.tools import tool
 
 from enshittify_tools.result import MutationEdit, MutationResult
@@ -44,7 +45,9 @@ class _CallIndirectionIntroducer(ast.NodeTransformer):
 
     def replace_target(self, tree: ast.AST, delegate_name: str) -> ast.AST:
         self.delegate_name = delegate_name
-        return _CallIndirectionRewriter(self.target_name or "", delegate_name, self).visit(tree)
+        return _CallIndirectionRewriter(
+            self.target_name or "", delegate_name, self
+        ).visit(tree)
 
 
 class _CallIndirectionRewriter(ast.NodeTransformer):
@@ -83,7 +86,9 @@ def _insertion_index(tree: ast.Module) -> int:
         if isinstance(value, ast.Constant) and isinstance(value.value, str):
             index = 1
 
-    while index < len(tree.body) and isinstance(tree.body[index], (ast.Import, ast.ImportFrom)):
+    while index < len(tree.body) and isinstance(
+        tree.body[index], (ast.Import, ast.ImportFrom)
+    ):
         index += 1
     return index
 

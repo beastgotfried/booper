@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+
 from langchain.tools import tool
 
 from enshittify_tools.result import MutationEdit, MutationResult
@@ -59,14 +60,20 @@ class _LiteralEncoder(ast.NodeTransformer):
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
         node.args = self.visit(node.args)
-        node.decorator_list = [self.visit(decorator) for decorator in node.decorator_list]
+        node.decorator_list = [
+            self.visit(decorator) for decorator in node.decorator_list
+        ]
         node.returns = self.visit(node.returns) if node.returns is not None else None
         node.body = self._visit_body(node.body)
         return node
 
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AsyncFunctionDef:
+    def visit_AsyncFunctionDef(
+        self, node: ast.AsyncFunctionDef
+    ) -> ast.AsyncFunctionDef:
         node.args = self.visit(node.args)
-        node.decorator_list = [self.visit(decorator) for decorator in node.decorator_list]
+        node.decorator_list = [
+            self.visit(decorator) for decorator in node.decorator_list
+        ]
         node.returns = self.visit(node.returns) if node.returns is not None else None
         node.body = self._visit_body(node.body)
         return node
@@ -74,8 +81,19 @@ class _LiteralEncoder(ast.NodeTransformer):
     def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
         node.bases = [self.visit(base) for base in node.bases]
         node.keywords = [self.visit(keyword) for keyword in node.keywords]
-        node.decorator_list = [self.visit(decorator) for decorator in node.decorator_list]
+        node.decorator_list = [
+            self.visit(decorator) for decorator in node.decorator_list
+        ]
         node.body = self._visit_body(node.body)
+        return node
+
+    def visit_JoinedStr(self, node: ast.JoinedStr) -> ast.JoinedStr:
+        # Literal f-string segments must remain Constant nodes. Calls are only valid
+        # inside expressions represented by FormattedValue nodes.
+        node.values = [
+            self.visit(value) if isinstance(value, ast.FormattedValue) else value
+            for value in node.values
+        ]
         return node
 
     def visit_Constant(self, node: ast.Constant) -> ast.expr:
@@ -124,8 +142,20 @@ def mutate_source(code: str) -> MutationResult:
             warnings=[],
         )
 
+    try:
+        encoded_code = ast.unparse(encoded_tree)
+        ast.parse(encoded_code)
+    except (SyntaxError, ValueError) as error:
+        return MutationResult(
+            code=code,
+            changed=False,
+            summary="Literal encoding was skipped because the result was not valid Python.",
+            edits=[],
+            warnings=[f"Literal encoder validation failed: {error}"],
+        )
+
     return MutationResult(
-        code=ast.unparse(encoded_tree),
+        code=encoded_code,
         changed=True,
         summary=f"Encoded {len(encoder.edits)} literal(s).",
         edits=encoder.edits,

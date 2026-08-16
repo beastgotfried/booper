@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import ast
+
 from langchain.tools import tool
 
 from enshittify_tools.result import MutationEdit, MutationResult
-
 
 _IMPORT_ALIAS = "_enshittify_collections"
 
@@ -27,7 +27,9 @@ def _insertion_index(tree: ast.Module) -> int:
         value = tree.body[0].value
         if isinstance(value, ast.Constant) and isinstance(value.value, str):
             index = 1
-    while index < len(tree.body) and isinstance(tree.body[index], (ast.Import, ast.ImportFrom)):
+    while index < len(tree.body) and isinstance(
+        tree.body[index], (ast.Import, ast.ImportFrom)
+    ):
         index += 1
     return index
 
@@ -54,7 +56,9 @@ def mutate_source(code: str) -> MutationResult:
             warnings=[],
         )
 
-    import_node = ast.Import(names=[ast.alias(name="collections", asname=_IMPORT_ALIAS)])
+    import_node = ast.Import(
+        names=[ast.alias(name="collections", asname=_IMPORT_ALIAS)]
+    )
     index = _insertion_index(tree)
     tree.body.insert(index, import_node)
     ast.fix_missing_locations(tree)
@@ -71,7 +75,9 @@ def mutate_source(code: str) -> MutationResult:
                 line=index + 1,
             )
         ],
-        warnings=["Package manifests are intentionally not modified by this source-only tool."],
+        warnings=[
+            "Package manifests are intentionally not modified by this source-only tool."
+        ],
     )
 
 

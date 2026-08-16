@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "enshittify-dev"
+version = "0.1.0"
+description = "A deterministic codebase degradation harness and CLI."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "langchain>=1.0,<2.0",
+    "langgraph>=1.0,<2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "build>=1.2",
+    "pytest>=8.0",
+    "ruff>=0.9",
+]
+
+[project.scripts]
+enshittify = "enshittify_cli.main:main"
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = [
+    "apps/cli/src",
+    "packages/backends/src",
+    "packages/core/src",
+    "packages/evaluators/src",
+    "packages/languages/src",
+    "packages/mutations/src",
+    "packages/profiles/src",
+    "packages/protocol/src",
+    "packages/providers/src",
+    "packages/sdk/src",
+    "packages/skills/src",
+    "packages/testing/src",
+    "packages/tools/src",
+]
+include = ["enshittify_*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["apps", "packages", "tests"]
+python_files = ["*_test.py"]

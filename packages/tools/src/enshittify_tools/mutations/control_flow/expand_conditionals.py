@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import copy
+
 from langchain.tools import tool
 
 from enshittify_tools.result import MutationEdit, MutationResult
